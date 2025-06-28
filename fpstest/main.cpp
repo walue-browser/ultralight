@@ -17,7 +17,8 @@ const char* htmlString(double fps, int frame_count, double elapsed_time);
 ///
 
 class FPSTestApp : public WindowListener,
-                   public ViewListener {
+                   public ViewListener,
+                   public LoadListener {
   RefPtr<App> app_;
   RefPtr<Window> window_;
   RefPtr<Overlay> overlay_;
@@ -51,7 +52,39 @@ public:
 
   void LoadInitialContent() {
     double elapsed = 0.0;
+    std::cout << "Loading initial content..." << std::endl;
+    
+    // Set explicit background color to help diagnose rendering issues
+    overlay_->view()->EvaluateScript("document.body.style.backgroundColor = 'red';");
+    
+    // Use a simpler HTML first to test if basic rendering works
+    const char* simple_html = R"(
+      <html>
+      <head>
+        <style>
+          body { background-color: blue; color: white; font-family: sans-serif; }
+          h1 { font-size: 48px; text-align: center; margin-top: 100px; }
+        </style>
+      </head>
+      <body>
+        <h1>Ultralight FPS Test</h1>
+        <div style="text-align: center; font-size: 24px;">
+          If you can see this text, rendering is working!
+        </div>
+      </body>
+      </html>
+    )";
+    
+    // Load the simple HTML first
+    overlay_->view()->LoadHTML(simple_html);
+    
+    // Wait a bit before loading the complex HTML
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    
+    // Now load the actual content
     overlay_->view()->LoadHTML(htmlString(current_fps_, frame_count_, elapsed));
+    
+    std::cout << "Initial content loaded." << std::endl;
   }
 
   void UpdateFPS() {
@@ -59,6 +92,18 @@ public:
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_update_);
     
     frame_count_++;
+    
+    // Every 30 frames, check if the view is actually rendering
+    if (frame_count_ % 30 == 0) {
+      // Try to get the background color to see if rendering is working
+      std::string js_result = overlay_->view()->EvaluateScript("document.body.style.backgroundColor").ToString();
+      std::cout << "Background color: " << js_result << std::endl;
+      
+      // Force a repaint
+      overlay_->view()->EvaluateScript("document.body.style.opacity = 0.99;");
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      overlay_->view()->EvaluateScript("document.body.style.opacity = 1.0;");
+    }
     
     if (duration.count() >= 100) {
       auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time_);
@@ -71,6 +116,10 @@ public:
         current_fps_ = frame_count_ / elapsed_seconds;
       }
       
+      // Add debug info
+      std::cout << "Updating HTML content..." << std::endl;
+      
+      // Load the HTML content
       overlay_->view()->LoadHTML(htmlString(current_fps_, frame_count_, elapsed_seconds));
       
       last_update_ = now;
@@ -94,10 +143,30 @@ public:
   }
 
   void Run() {
+    // Give the renderer some time to initialize
+    std::cout << "Waiting for renderer to initialize..." << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    std::cout << "Starting main loop..." << std::endl;
+    
+    // Add a ViewListener to get notified when the DOM is ready
+    overlay_->view()->set_load_listener(this);
+    
     while (!should_quit_) {
+      // Process app events
+      app_->Update();
+      
       UpdateFPS();
       std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS target
     }
+  }
+  
+  // Implement load listener methods
+  virtual void OnDOMReady(ultralight::View* caller) override {
+    std::cout << "DOM is ready!" << std::endl;
+    
+    // Try to set background color via JavaScript
+    caller->EvaluateScript("document.body.style.backgroundColor = 'green';");
+    std::cout << "Set background color to green via JavaScript" << std::endl;
   }
   
 private:
