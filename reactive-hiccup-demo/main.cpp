@@ -64,7 +64,7 @@ public:
       RefPtr<JSContext> context = view()->LockJSContext();
       SetJSContext(context->ctx());
       JSObject global = JSGlobalObject();
-      global["hiccup_content"] = current_hiccup_html_;
+      global["hiccup_content"] = JSString(current_hiccup_html_.c_str());
       view()->EvaluateScript("updateHiccupContent(hiccup_content);");
     }
   }
@@ -96,15 +96,15 @@ public:
     
     // Initialize with current content if available
     if (!current_hiccup_html_.empty()) {
-      global["hiccup_content"] = current_hiccup_html_;
+      global["hiccup_content"] = JSString(current_hiccup_html_.c_str());
       caller->EvaluateScript("updateHiccupContent(hiccup_content);");
     }
   }
   
   JSValue NotifyHiccupUpdate(const JSObject& thisObject, const JSArgs& args) {
     if (args.size() >= 1) {
-      std::string message = args[0].ToString();
-      printf("Hiccup update notification: %s\n", message.c_str());
+      String message = args[0].ToString();
+      printf("Hiccup update notification: %s\n", message.utf8().data());
     }
     return JSValue();
   }
@@ -141,8 +141,8 @@ public:
   
   JSValue UpdateHiccupPreview(const JSObject& thisObject, const JSArgs& args) {
     if (preview_window_ && args.size() == 1) {
-      std::string content = args[0].ToString();
-      preview_window_->update_hiccup_content(content);
+      String content = args[0].ToString();
+      preview_window_->update_hiccup_content(content.utf8().data());
     }
     return JSValue();
   }
